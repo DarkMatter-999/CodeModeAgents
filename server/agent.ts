@@ -50,6 +50,18 @@ export async function runAgent(
     ...(messages ? { messages } : prompt ? { prompt } : {}),
     tools,
     maxRetries: 1,
+    prepareStep: ({ messages: stepMessages }) => ({
+      messages: stepMessages.map((message) =>
+        message.role === 'assistant'
+          ? {
+              ...message,
+              content: Array.isArray(message.content)
+                ? message.content.filter((part) => part.type !== 'reasoning')
+                : message.content,
+            }
+          : message
+      ),
+    }),
     ...(stopWhen ? { stopWhen } : {}),
   } as Parameters<typeof streamText>[0];
 
