@@ -6,6 +6,14 @@ export interface ExecuteResult {
   logs?: string[];
 }
 
+const sanitizeToolName = (name: string): string => {
+  let sanitized = name.replace(/[-.\s]/g, '_');
+  sanitized = sanitized.replace(/[^a-zA-Z0-9_$]/g, '');
+  if (!sanitized) return '_';
+  if (/^[0-9]/.test(sanitized)) sanitized = '_' + sanitized;
+  return sanitized;
+};
+
 export const localNodeExecutor = {
   async execute(
     code: string,
@@ -24,7 +32,21 @@ export const localNodeExecutor = {
 
     if (Array.isArray(providersOrFns)) {
       for (const provider of providersOrFns) {
-        sandbox[provider.name] = provider.fns;
+        const sanitizedFns: Record<
+          string,
+          (...args: unknown[]) => Promise<unknown>
+        > = {};
+        for (const [name, fn] of Object.entries(provider.fns)) {
+          const sanitized = sanitizeToolName(name);
+          if (sanitizedFns[sanitized] && sanitizedFns[sanitized] !== fn) {
+            return {
+              result: undefined,
+              error: `Tool names map to the same sanitized name "${sanitized}" in provider "${provider.name}"`,
+            };
+          }
+          sanitizedFns[sanitized] = fn;
+        }
+        sandbox[provider.name] = sanitizedFns;
       }
     } else {
       sandbox.codemode = providersOrFns;
