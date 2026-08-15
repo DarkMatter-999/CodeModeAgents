@@ -1,3 +1,5 @@
+import { isAbortError } from '@ai-sdk/provider-utils';
+
 export interface RetryConfig {
   maxRetries: number;
   baseDelayMs: number;
@@ -49,6 +51,7 @@ export function withRetry(
       try {
         response = await fetchImpl(input, init);
       } catch (error) {
+        if (isAbortError(error)) throw error;
         if (attempt >= config.maxRetries) throw error;
         attempt++;
         await sleep(computeRetryDelayMs(attempt - 1, undefined, config));
