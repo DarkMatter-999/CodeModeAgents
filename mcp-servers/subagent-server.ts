@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
-import { streamText, stepCountIs } from 'ai';
+import { streamText, isStepCount } from 'ai';
 import dotenv from 'dotenv';
 import { createCodeTool } from '@cloudflare/codemode/ai';
 import { localNodeExecutor } from '../server/executor';
@@ -83,19 +83,19 @@ server.registerTool(
     try {
       const result = streamText({
         model: getModel(),
-        system: systemPrompt,
+        instructions: systemPrompt,
         prompt: task,
         tools: {
           codemode: codemodeTool,
         },
         maxRetries: 4,
-        stopWhen: stepCountIs(10),
+        stopWhen: isStepCount(10),
       });
 
       let fullText = '';
       let isToolCalling = false;
 
-      for await (const chunk of result.fullStream) {
+      for await (const chunk of result.stream) {
         if (chunk.type === 'text-delta') {
           fullText += chunk.text;
           publishEvent(conversationId, {

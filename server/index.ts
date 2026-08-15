@@ -3,7 +3,13 @@ import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import Redis from 'ioredis';
 import cors from 'cors';
-import { streamText, convertToModelMessages } from 'ai';
+import {
+  streamText,
+  convertToModelMessages,
+  generateId,
+  toUIMessageStream,
+  pipeUIMessageStreamToResponse,
+} from 'ai';
 import type { ToolSet, UIMessage } from 'ai';
 import dotenv from 'dotenv';
 import { createCodeTool } from '@cloudflare/codemode/ai';
@@ -45,7 +51,15 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const modelMessages = await convertToModelMessages(messages);
+    const sanitizedMessages = messages.map((message) => {
+      if (message.role !== 'assistant') return message;
+      return {
+        ...message,
+        parts: message.parts.filter((part) => part.type !== 'reasoning'),
+      };
+    });
+
+    const modelMessages = await convertToModelMessages(sanitizedMessages);
 
     const mappedTools = await mcpManager.getAllMappedTools({ conversationId });
 
@@ -60,13 +74,19 @@ app.post('/api/chat', async (req, res) => {
 
     const result = streamText({
       model: getModel(),
-      system: systemPrompt,
+      instructions: systemPrompt,
       messages: modelMessages,
       tools,
       maxRetries: 3,
     });
 
-    result.pipeUIMessageStreamToResponse(res);
+    const uiStream = toUIMessageStream({
+      stream: result.stream,
+      originalMessages: messages,
+      generateMessageId: generateId,
+    });
+
+    await pipeUIMessageStreamToResponse({ stream: uiStream, response: res });
   } catch (err) {
     console.error('Chat error:', err);
     res.status(500).json({ error: 'Failed to stream response' });
