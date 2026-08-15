@@ -127,7 +127,7 @@ function App() {
 
   const submit = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || mode === null) return;
     if (mode) {
       localStorage.setItem(MODE_STORAGE_KEY, mode);
     }
