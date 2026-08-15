@@ -35,7 +35,7 @@ export const localNodeExecutor = {
         const sanitizedFns: Record<
           string,
           (...args: unknown[]) => Promise<unknown>
-        > = {};
+        > = Object.create(null);
         for (const [name, fn] of Object.entries(provider.fns)) {
           const sanitized = sanitizeToolName(name);
           if (sanitizedFns[sanitized] && sanitizedFns[sanitized] !== fn) {
