@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import dotenv from 'dotenv';
+import { withRetry, getRetryConfig } from './retry';
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ export const provider = createOpenAICompatible({
   apiKey: API_KEY,
   baseURL: API_URL,
   includeUsage: true,
+  fetch: withRetry(fetch, getRetryConfig()),
 });
 
 export const modelName = MODEL_NAME;
