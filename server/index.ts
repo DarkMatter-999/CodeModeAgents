@@ -15,6 +15,7 @@ import { McpManager } from './mcp-manager';
 import { ModeStore } from './mode-store';
 import { runAgent } from './agent';
 import { getMcpServersConfig } from './mcp-servers-config';
+import { extractStats } from './stats';
 
 dotenv.config();
 
@@ -92,6 +93,18 @@ app.post('/api/chat', async (req, res) => {
     });
 
     await pipeUIMessageStreamToResponse({ stream: uiStream, response: res });
+
+    if (conversationId) {
+      try {
+        const stats = await extractStats(result);
+        await redisPublisher.publish(
+          `conversation:${conversationId}`,
+          JSON.stringify(stats)
+        );
+      } catch (err) {
+        console.error('Failed to publish conversation stats:', err);
+      }
+    }
   } catch (err) {
     console.error('Chat error:', err);
     res.status(500).json({ error: 'Failed to stream response' });
@@ -129,6 +142,7 @@ wss.on('connection', (ws, req) => {
 const redisSubscriber = new Redis(
   process.env.REDIS_URL ?? 'redis://redis:6379'
 );
+const redisPublisher = new Redis(process.env.REDIS_URL ?? 'redis://redis:6379');
 
 redisSubscriber.psubscribe('conversation:*', (err, count) => {
   if (err) {
