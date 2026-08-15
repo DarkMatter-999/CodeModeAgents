@@ -11,6 +11,7 @@
     "dev:server": "nodemon -e ts --exec \"node --import tsx --import ./server/cloudflare-workers-shim.mjs server/index.ts\"",
     "build": "tsc -b && vite build",
     "lint": "tsc -b && prettier --check .",
+    "test": "node --import tsx --test \"server/*.test.ts\"",
     "format": "prettier --write .",
     "prepare": "husky",
     "preview": "vite preview"
