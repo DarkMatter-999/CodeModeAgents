@@ -74,11 +74,11 @@ server.registerTool(
       task,
     });
 
-    const parentMode = conversationId
-      ? ((await subagentModeStore.getMode(conversationId)) ?? 'traditional')
-      : 'traditional';
-
     try {
+      const parentMode = conversationId
+        ? ((await subagentModeStore.getMode(conversationId)) ?? 'traditional')
+        : 'traditional';
+
       const result = await runAgent({
         mode: parentMode,
         mcpManager: subagentMcpManager,
