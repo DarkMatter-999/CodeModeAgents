@@ -4,19 +4,16 @@ import { WebSocketServer, WebSocket } from 'ws';
 import Redis from 'ioredis';
 import cors from 'cors';
 import {
-  streamText,
   convertToModelMessages,
   generateId,
   toUIMessageStream,
   pipeUIMessageStreamToResponse,
 } from 'ai';
-import type { ToolSet, UIMessage } from 'ai';
+import type { UIMessage } from 'ai';
 import dotenv from 'dotenv';
-import { createCodeTool } from '@cloudflare/codemode/ai';
-import { systemPrompt } from './prompt';
-import { localNodeExecutor } from './executor';
 import { McpManager } from './mcp-manager';
-import { getModel } from './provider';
+import { ModeStore } from './mode-store';
+import { runAgent } from './agent';
 import { getMcpServersConfig } from './mcp-servers-config';
 
 dotenv.config();
@@ -29,6 +26,7 @@ app.use(cors());
 app.use(express.json({ limit: '16mb' }));
 
 const mcpManager = new McpManager();
+const modeStore = new ModeStore();
 
 const setupMcp = async () => {
   console.log('Initializing MCP Servers...');
@@ -44,13 +42,32 @@ app.post('/api/chat', async (req, res) => {
     messages: UIMessage[];
     conversationId?: string;
   };
+  const requestedMode = (req.body as { mode?: string }).mode ?? 'traditional';
 
   if (!messages || !Array.isArray(messages)) {
     res.status(400).json({ error: 'messages array is required' });
     return;
   }
+  if (!conversationId) {
+    res.status(400).json({ error: 'conversationId is required' });
+    return;
+  }
 
   try {
+    const existingMode = await modeStore.getMode(conversationId);
+    let mode: 'traditional' | 'codemode';
+    if (existingMode === undefined) {
+      mode = requestedMode === 'codemode' ? 'codemode' : 'traditional';
+      await modeStore.setMode(conversationId, mode);
+    } else if (existingMode !== requestedMode) {
+      res
+        .status(409)
+        .json({ error: 'Agent mode is locked for this conversation' });
+      return;
+    } else {
+      mode = existingMode;
+    }
+
     const sanitizedMessages = messages.map((message) => {
       if (message.role !== 'assistant') return message;
       return {
@@ -61,23 +78,11 @@ app.post('/api/chat', async (req, res) => {
 
     const modelMessages = await convertToModelMessages(sanitizedMessages);
 
-    const mappedTools = await mcpManager.getAllMappedTools({ conversationId });
-
-    const codemodeTool = createCodeTool({
-      tools: mappedTools,
-      executor: localNodeExecutor,
-    });
-
-    const tools: ToolSet = {
-      codemode: codemodeTool,
-    };
-
-    const result = streamText({
-      model: getModel(),
-      instructions: systemPrompt,
+    const result = await runAgent({
+      mode,
+      mcpManager,
+      conversationId,
       messages: modelMessages,
-      tools,
-      maxRetries: 3,
     });
 
     const uiStream = toUIMessageStream({
