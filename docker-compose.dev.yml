@@ -39,6 +39,9 @@ services:
       - API_KEY=${API_KEY:-}
       - API_URL=${API_URL:-}
       - MODEL_NAME=${MODEL_NAME:-}
+      - RETRY_MAX_RETRIES=${RETRY_MAX_RETRIES:-5}
+      - RETRY_BASE_DELAY_MS=${RETRY_BASE_DELAY_MS:-500}
+      - RETRY_MAX_DELAY_MS=${RETRY_MAX_DELAY_MS:-30000}
     command: npm run dev:server
     depends_on:
       - redis

@@ -16,7 +16,12 @@ export class McpManager {
   async registerServer(config: ServerConfig) {
     const transport = new StdioClientTransport({
       command: 'npx',
-      args: ['tsx', config.path],
+      args: [
+        'tsx',
+        '--import',
+        './server/cloudflare-workers-shim.mjs',
+        config.path,
+      ],
       env: { ...process.env, ...config.env } as Record<string, string>,
     });
 

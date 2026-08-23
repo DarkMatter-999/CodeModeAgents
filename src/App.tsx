@@ -24,12 +24,22 @@ import { SubagentsSidebar } from './components/SubagentsSidebar';
 import { CanvasSidebar } from './components/CanvasSidebar';
 
 function App() {
+  const MODE_STORAGE_KEY = 'codemode-agents.mode';
+  const [mode, setMode] = useState<'traditional' | 'codemode' | null>(() => {
+    const saved = localStorage.getItem(MODE_STORAGE_KEY);
+    return saved === 'codemode' || saved === 'traditional' ? saved : null;
+  });
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
+
   const [conversationId] = useState(() => uuidv4());
 
   const { messages, sendMessage, status, error, stop } = useChat({
     transport: new DefaultChatTransport({
       api: '/api/chat',
-      body: { conversationId },
+      body: () => ({ conversationId, mode: modeRef.current ?? 'traditional' }),
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
   });
@@ -117,7 +127,10 @@ function App() {
 
   const submit = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || mode === null) return;
+    if (mode) {
+      localStorage.setItem(MODE_STORAGE_KEY, mode);
+    }
     await sendMessage({ role: 'user', parts: [{ type: 'text', text }] });
     setInput('');
     setTruncateAt(null);
@@ -274,7 +287,48 @@ function App() {
 
         {/* Messages */}
         <main className="flex-1 overflow-y-auto px-4 py-6 space-y-6 main-content relative z-10">
-          {displayedMessages.length === 0 && (
+          {mode === null && (
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-center empty-state">
+              <div className="flex items-center justify-center w-16 h-16 rounded-2xl empty-state-icon">
+                <Bot size={32} className="text-zinc-400" />
+              </div>
+              <h2 className="text-lg font-semibold text-zinc-100">
+                Choose an agent mode
+              </h2>
+              <p className="text-sm text-zinc-500 mt-1">
+                Picked once; cannot be changed mid-conversation.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 w-full max-w-xl">
+                <button
+                  type="button"
+                  onClick={() => setMode('traditional')}
+                  className="rounded-xl border border-zinc-800 hover:border-teal-500 bg-zinc-900/50 p-4 text-left transition-colors"
+                >
+                  <div className="text-sm font-semibold text-zinc-100">
+                    Traditional
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-1">
+                    Call tools directly. Recommended default. Parallel tool
+                    calls supported.
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('codemode')}
+                  className="rounded-xl border border-zinc-800 hover:border-indigo-500 bg-zinc-900/50 p-4 text-left transition-colors"
+                >
+                  <div className="text-sm font-semibold text-zinc-100">
+                    CodeMode
+                  </div>
+                  <div className="text-xs text-zinc-500 mt-1">
+                    Write and execute sandboxed JavaScript against MCP tools.
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mode !== null && displayedMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center empty-state">
               <div className="flex items-center justify-center w-16 h-16 rounded-2xl empty-state-icon">
                 <Bot size={32} className="text-zinc-400" />
@@ -371,7 +425,11 @@ function App() {
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Message Agent... (Shift+Enter for newline)"
+              placeholder={
+                mode === null
+                  ? 'Select an agent mode to begin'
+                  : 'Message Agent... (Shift+Enter for newline)'
+              }
               rows={1}
               className="flex-1 resize-none input-field rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-all overflow-y-auto"
             />
@@ -390,7 +448,7 @@ function App() {
                 type="button"
                 onClick={submit}
                 key="send-btn"
-                disabled={isLoading || !input.trim()}
+                disabled={isLoading || !input.trim() || mode === null}
                 className="shrink-0 flex items-center justify-center w-11 h-11 rounded-xl send-button disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed"
               >
                 <Send size={18} color="currentColor" />

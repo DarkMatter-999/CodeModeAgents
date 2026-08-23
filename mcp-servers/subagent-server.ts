@@ -3,12 +3,11 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
-import { streamText, stepCountIs } from 'ai';
+import { isStepCount } from 'ai';
 import dotenv from 'dotenv';
-import { createCodeTool } from '@cloudflare/codemode/ai';
-import { localNodeExecutor } from '../server/executor';
+import { runAgent } from '../server/agent';
+import { ModeStore } from '../server/mode-store';
 import { McpManager } from '../server/mcp-manager';
-import { getModel } from '../server/provider';
 import { getMcpServersConfig } from '../server/mcp-servers-config';
 
 dotenv.config();
@@ -21,6 +20,8 @@ const server = new McpServer({
 });
 
 const subagentMcpManager = new McpManager();
+
+const subagentModeStore = new ModeStore();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const publishEvent = (conversationId: string, event: any) => {
@@ -73,29 +74,24 @@ server.registerTool(
       task,
     });
 
-    const mappedTools = await subagentMcpManager.getAllMappedTools();
-
-    const codemodeTool = createCodeTool({
-      tools: mappedTools,
-      executor: localNodeExecutor,
-    });
-
     try {
-      const result = streamText({
-        model: getModel(),
-        system: systemPrompt,
+      const parentMode = conversationId
+        ? ((await subagentModeStore.getMode(conversationId)) ?? 'traditional')
+        : 'traditional';
+
+      const result = await runAgent({
+        mode: parentMode,
+        mcpManager: subagentMcpManager,
+        conversationId,
+        instructions: systemPrompt,
         prompt: task,
-        tools: {
-          codemode: codemodeTool,
-        },
-        maxRetries: 4,
-        stopWhen: stepCountIs(10),
+        stopWhen: isStepCount(10),
       });
 
       let fullText = '';
       let isToolCalling = false;
 
-      for await (const chunk of result.fullStream) {
+      for await (const chunk of result.stream) {
         if (chunk.type === 'text-delta') {
           fullText += chunk.text;
           publishEvent(conversationId, {
